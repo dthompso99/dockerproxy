@@ -2,6 +2,9 @@
 name = "dockerproxy"
 version = "0.1.0"
 edition = "2024"
+description = "A lightweight, multi-host caching Docker registry proxy"
+repository = "https://github.com/dthompso99/dockerproxy"
+license = "MIT"
 
 [dependencies]
 clap = { version = "4.6.1", features = ["derive"] }

@@ -1,5 +1,7 @@
 # dockerproxy
 
+[![Docker Image](https://github.com/dthompso99/dockerproxy/actions/workflows/docker-image.yml/badge.svg)](https://github.com/dthompso99/dockerproxy/actions/workflows/docker-image.yml)
+
 A lightweight, multi-host caching Docker registry proxy.
 
 I needed a simple local Docker cache to prevent image-pull-backoff errors when I restarted my cluster, and overall speed up the cluster on a full reboot. Additionally, if the cache is fully loaded, it would be great to be able to boot with no internet. There are other solutions out there, far more intricate than this, but they did not check the boxes for me:
@@ -169,7 +171,7 @@ Returns `ok`.
 GitHub Actions builds the container image and publishes it to GHCR:
 
 ```text
-ghcr.io/<owner>/<repo>
+ghcr.io/dthompso99/dockerproxy
 ```
 
 Pushes to `main` publish a branch tag, and version tags like `v0.1.0` publish semantic version tags. Pull requests build the image but do not push it.
@@ -199,4 +201,4 @@ It is also not magic prewarm. If an image has never been pulled through dockerpr
 - add a small test suite around request parsing, namespace rewriting, TTL, and auth challenge parsing
 - do a real no-internet validation pass with a warmed cache
 - add a `/ready` endpoint that checks config and cache writability
-- publish the image and reference it from a separate Home Assistant add-on repo
+- reference the published image from a separate Home Assistant add-on repo

@@ -1,0 +1,17 @@
+services:
+  dockerproxy:
+    image: ghcr.io/dthompso99/dockerproxy:main
+    container_name: dockerproxy
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./proxy.yaml:/proxy.yaml:ro
+      - ./cache:/cache
+    command:
+      - --config-file
+      - /proxy.yaml
+      - --cache-dir
+      - /cache
+      - --log-level
+      - "1"

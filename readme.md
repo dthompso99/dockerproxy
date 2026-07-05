@@ -47,6 +47,15 @@ docker run --rm -p 8080:8080 \
   --log-level 1
 ```
 
+Or with Compose:
+
+```bash
+cp proxy.example.yaml proxy.yaml
+docker compose -f docker-compose.example.yaml up -d
+```
+
+If your Docker install still uses the older standalone Compose binary, use `docker-compose` in place of `docker compose`.
+
 The container image is built as a static musl binary and copied into `FROM scratch`. The only extra runtime file is the CA certificate bundle so outbound HTTPS registry calls work.
 
 ## Docker Configuration
@@ -183,6 +192,8 @@ The scratch image defaults to:
 ```
 
 That lets a Home Assistant add-on pass its options file directly without needing a wrapper script.
+
+The image intentionally does not set a fixed non-root `USER`. Home Assistant replaces `/data` with a Supervisor-managed mount, and a baked-in numeric user can lose write access to `/data/cache`. If you are running dockerproxy somewhere else and want a non-root user, set the user at deployment time after making sure the mounted cache directory is writable by that user.
 
 ## Home Assistant
 

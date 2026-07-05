@@ -24,13 +24,12 @@ FROM scratch
 WORKDIR /
 
 COPY --from=builder /usr/src/dockerproxy/target/x86_64-unknown-linux-musl/release/dockerproxy /dockerproxy
-COPY --from=builder --chown=65532:65532 /image/cache /cache
-COPY --from=builder --chown=65532:65532 /image/data /data
+COPY --from=builder /image/cache /cache
+COPY --from=builder /image/data /data
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
-USER 65532:65532
 VOLUME ["/cache", "/data"]
 EXPOSE 8080
 

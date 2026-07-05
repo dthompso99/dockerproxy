@@ -320,6 +320,11 @@ fn normalize_embedded_namespace(config: &Config, target: &mut RequestTarget) {
             }
         }
     }
+
+    if let Some((namespace, rest)) = embedded_registry_namespace(&target.path) {
+        target.namespace = Some(namespace.to_string());
+        target.path = format!("/v2/{rest}");
+    }
 }
 
 fn host_namespaces(host: &DockerHost) -> Vec<&str> {
@@ -330,6 +335,17 @@ fn host_namespaces(host: &DockerHost) -> Vec<&str> {
         }
     }
     namespaces
+}
+
+fn embedded_registry_namespace(path: &str) -> Option<(&str, &str)> {
+    let rest = path.strip_prefix("/v2/")?;
+    let (namespace, rest) = rest.split_once('/')?;
+
+    if namespace == "localhost" || namespace.contains('.') || namespace.contains(':') {
+        Some((namespace, rest))
+    } else {
+        None
+    }
 }
 
 fn parse_registry_request(path: &str) -> Option<RegistryRequest<'_>> {

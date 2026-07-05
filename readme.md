@@ -177,13 +177,13 @@ Returns `ok`.
 
 ## Published Image
 
-GitHub Actions builds the container image and publishes it to GHCR:
+GitHub Actions builds the multi-arch container image and publishes it to GHCR:
 
 ```text
 ghcr.io/dthompso99/dockerproxy
 ```
 
-Pushes to `main` publish a branch tag, and version tags like `v0.1.0` publish semantic version tags. Pull requests build the image but do not push it.
+Pushes to `main` publish a branch tag, and version tags like `v0.1.0` publish semantic version tags. Pull requests build the image but do not push it. Published images are built for `linux/amd64` and `linux/arm64`.
 
 The scratch image defaults to:
 

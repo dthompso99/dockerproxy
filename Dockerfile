@@ -1,29 +1,25 @@
-FROM rust:1.93-slim-bullseye AS builder
+FROM rust:1.93-alpine AS builder
 
 WORKDIR /usr/src/dockerproxy
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends musl-tools \
-    && rm -rf /var/lib/apt/lists/*
-RUN rustup target add x86_64-unknown-linux-musl
+RUN apk add --no-cache build-base
 
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 
-RUN cargo build --release --target x86_64-unknown-linux-musl
+RUN cargo build --release \
+    && cp target/release/dockerproxy /dockerproxy
 RUN mkdir -p /image/cache /image/data/cache
 
-FROM debian:bullseye-slim AS certs
+FROM --platform=$BUILDPLATFORM alpine AS certs
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates
 
 FROM scratch
 
 WORKDIR /
 
-COPY --from=builder /usr/src/dockerproxy/target/x86_64-unknown-linux-musl/release/dockerproxy /dockerproxy
+COPY --from=builder /dockerproxy /dockerproxy
 COPY --from=builder /image/cache /cache
 COPY --from=builder /image/data /data
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt

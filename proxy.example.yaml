@@ -1,0 +1,19 @@
+hosts:
+  - name: dockerhub
+    url: https://registry-1.docker.io
+
+  - name: google
+    url: https://gcr.io
+
+  - name: quay
+    url: https://quay.io
+    username: your-username
+    token: your-token
+
+  - name: internal
+    url: https://registry.example.com
+    username: your-username
+    token: your-token
+
+ttl: 31557600
+log_level: 1

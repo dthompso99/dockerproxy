@@ -1,6 +1,7 @@
 use super::ServerState;
 use super::logging::{log, log_always};
 use crate::DockerHost;
+use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
@@ -16,13 +17,23 @@ pub(super) struct CachedResponse {
 }
 
 pub(super) struct CacheEntry {
-    pub(super) id: String,
     pub(super) host: String,
     pub(super) kind: String,
     pub(super) repository: String,
     pub(super) reference: String,
     pub(super) size: u64,
     pub(super) age_secs: u64,
+    pub(super) ttl_remaining_secs: u64,
+    pub(super) expires_at: Option<SystemTime>,
+}
+
+pub(super) struct CacheImage {
+    pub(super) id: String,
+    pub(super) host: String,
+    pub(super) repository: String,
+    pub(super) size: u64,
+    pub(super) item_count: u64,
+    pub(super) oldest_age_secs: u64,
     pub(super) ttl_remaining_secs: u64,
     pub(super) expires_at: Option<SystemTime>,
 }
@@ -114,20 +125,51 @@ pub(super) fn list_cache_entries(cache_dir: &Path, ttl: u64) -> io::Result<Vec<C
     Ok(entries)
 }
 
-pub(super) fn delete_cache_entry(cache_dir: &Path, id: &str, log_level: u16) -> io::Result<bool> {
-    let Some(entry_path) = cache_entry_path_from_id(cache_dir, id) else {
+pub(super) fn list_cache_images(cache_dir: &Path, ttl: u64) -> io::Result<Vec<CacheImage>> {
+    let mut images = BTreeMap::<(String, String), CacheImage>::new();
+
+    for entry in list_cache_entries(cache_dir, ttl)? {
+        let key = (entry.host.clone(), entry.repository.clone());
+        let image = images.entry(key).or_insert_with(|| CacheImage {
+            id: format!("{}/{}", entry.host, entry.repository),
+            host: entry.host.clone(),
+            repository: entry.repository.clone(),
+            size: 0,
+            item_count: 0,
+            oldest_age_secs: 0,
+            ttl_remaining_secs: 0,
+            expires_at: None,
+        });
+
+        image.size += entry.size;
+        image.item_count += 1;
+        image.oldest_age_secs = image.oldest_age_secs.max(entry.age_secs);
+
+        if entry.ttl_remaining_secs >= image.ttl_remaining_secs {
+            image.ttl_remaining_secs = entry.ttl_remaining_secs;
+            image.expires_at = entry.expires_at;
+        }
+    }
+
+    Ok(images.into_values().collect())
+}
+
+pub(super) fn delete_cache_image(cache_dir: &Path, id: &str, log_level: u16) -> io::Result<bool> {
+    let Some((manifest_path, blob_path)) = cache_image_paths_from_id(cache_dir, id) else {
         return Ok(false);
     };
 
-    if entry_path.exists() {
-        fs::remove_dir_all(&entry_path)?;
+    let mut removed = false;
+    for path in [&manifest_path, &blob_path] {
+        if path.exists() {
+            fs::remove_dir_all(path)?;
+            removed = true;
+        }
+    }
+
+    if removed {
         remove_empty_dirs(cache_dir)?;
-        log(
-            log_level,
-            1,
-            "cache",
-            &format!("deleted cache entry {}", entry_path.display()),
-        );
+        log(log_level, 1, "cache", &format!("deleted cache image {id}"));
     }
 
     Ok(true)
@@ -277,7 +319,6 @@ fn cache_entry_from_path(
     let expires_at = modified.checked_add(Duration::from_secs(ttl));
 
     Ok(Some(CacheEntry {
-        id: relative.to_string_lossy().into_owned(),
         host,
         kind,
         repository,
@@ -289,7 +330,7 @@ fn cache_entry_from_path(
     }))
 }
 
-fn cache_entry_path_from_id(cache_dir: &Path, id: &str) -> Option<PathBuf> {
+fn cache_image_paths_from_id(cache_dir: &Path, id: &str) -> Option<(PathBuf, PathBuf)> {
     let id_path = Path::new(id);
 
     if id_path.is_absolute()
@@ -303,8 +344,20 @@ fn cache_entry_path_from_id(cache_dir: &Path, id: &str) -> Option<PathBuf> {
         return None;
     }
 
-    let path = cache_dir.join(id_path);
-    is_cache_entry_dir(&path).then_some(path)
+    let parts: Vec<_> = id_path.components().collect();
+    if parts.len() < 2 {
+        return None;
+    }
+
+    let host = parts[0].as_os_str();
+    let repository = parts[1..]
+        .iter()
+        .fold(PathBuf::new(), |path, part| path.join(part.as_os_str()));
+
+    Some((
+        cache_dir.join(host).join("manifests").join(&repository),
+        cache_dir.join(host).join("blobs").join(repository),
+    ))
 }
 
 fn component_to_string(component: Component<'_>) -> Option<String> {

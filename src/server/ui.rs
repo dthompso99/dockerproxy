@@ -1,5 +1,5 @@
 use super::ServerState;
-use super::cache::{delete_cache_entry, list_cache_entries};
+use super::cache::{delete_cache_image, list_cache_images};
 use super::http::{
     escape_html, format_bytes, format_duration, query_value, url_decode, url_encode,
     write_html_response, write_redirect_response, write_text_response,
@@ -8,8 +8,8 @@ use std::io;
 use std::net::TcpStream;
 
 pub(super) fn write_ui_response(stream: &mut TcpStream, state: &ServerState) -> io::Result<()> {
-    let entries = list_cache_entries(&state.cache_dir, state.ttl)?;
-    let total_size: u64 = entries.iter().map(|entry| entry.size).sum();
+    let images = list_cache_images(&state.cache_dir, state.ttl)?;
+    let total_size: u64 = images.iter().map(|image| image.size).sum();
     let mut html = String::new();
 
     html.push_str(
@@ -18,38 +18,37 @@ pub(super) fn write_ui_response(stream: &mut TcpStream, state: &ServerState) -> 
     html.push_str("<style>body{font-family:system-ui,sans-serif;margin:2rem;}table{border-collapse:collapse;width:100%;}th,td{border-bottom:1px solid #ddd;padding:.5rem;text-align:left;}th{background:#f6f6f6;}code{font-family:ui-monospace,monospace;}button{cursor:pointer;} .muted{color:#666;}</style>");
     html.push_str("</head><body><h1>dockerproxy cache</h1>");
     html.push_str(&format!(
-        "<p class=\"muted\">{} entries, {}, ttl {}</p>",
-        entries.len(),
+        "<p class=\"muted\">{} images, {}, ttl {}</p>",
+        images.len(),
         format_bytes(total_size),
         format_duration(state.ttl),
     ));
-    html.push_str("<table><thead><tr><th>Host</th><th>Type</th><th>Repository</th><th>Reference</th><th>Size</th><th>Age</th><th>Deletes In</th><th></th></tr></thead><tbody>");
+    html.push_str("<table><thead><tr><th>Host</th><th>Repository</th><th>Objects</th><th>Size</th><th>Oldest Age</th><th>Fully Deletes In</th><th></th></tr></thead><tbody>");
 
-    for entry in entries {
+    for image in images {
         html.push_str("<tr>");
-        html.push_str(&format!("<td>{}</td>", escape_html(&entry.host)));
-        html.push_str(&format!("<td>{}</td>", escape_html(&entry.kind)));
+        html.push_str(&format!("<td>{}</td>", escape_html(&image.host)));
         html.push_str(&format!(
             "<td><code>{}</code></td>",
-            escape_html(&entry.repository)
+            escape_html(&image.repository)
         ));
-        html.push_str(&format!(
-            "<td><code>{}</code></td>",
-            escape_html(&entry.reference)
-        ));
-        html.push_str(&format!("<td>{}</td>", format_bytes(entry.size)));
-        html.push_str(&format!("<td>{}</td>", format_duration(entry.age_secs)));
+        html.push_str(&format!("<td>{}</td>", image.item_count));
+        html.push_str(&format!("<td>{}</td>", format_bytes(image.size)));
         html.push_str(&format!(
             "<td>{}</td>",
-            entry
+            format_duration(image.oldest_age_secs)
+        ));
+        html.push_str(&format!(
+            "<td>{}</td>",
+            image
                 .expires_at
-                .map(|_| format_duration(entry.ttl_remaining_secs))
+                .map(|_| format_duration(image.ttl_remaining_secs))
                 .unwrap_or_else(|| "now".to_string())
         ));
         html.push_str("<td>");
         html.push_str(&format!(
             "<form method=\"post\" action=\"/ui/delete?id={}\"><button type=\"submit\">Delete</button></form>",
-            url_encode(&entry.id)
+            url_encode(&image.id)
         ));
         html.push_str("</td></tr>");
     }
@@ -68,7 +67,7 @@ pub(super) fn handle_ui_delete(
         return Ok(());
     };
 
-    if !delete_cache_entry(&state.cache_dir, &id, state.log_level)? {
+    if !delete_cache_image(&state.cache_dir, &id, state.log_level)? {
         write_text_response(stream, "400 Bad Request", "invalid id\n")?;
         return Ok(());
     }
